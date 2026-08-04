@@ -28,12 +28,15 @@ def fit_sarimax(
     seasonal_order: tuple,
     trend: str = "c",
     maxiter: int = 300,
+    exog: pd.DataFrame = None,
 ) -> SARIMAXResults:
-    """Fit a SARIMAX model on the training series."""
+    """Fit a SARIMAX model on the training series, optionally with
+    exogenous covariates (`exog`, same index as `train`)."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         model = SARIMAX(
             train,
+            exog=exog,
             order=order,
             seasonal_order=seasonal_order,
             trend=trend,
@@ -49,6 +52,7 @@ def rolling_sarimax_forecast(
     test: pd.Series,
     block_size: int = 24,
     alpha: float = 0.05,
+    exog_test: pd.DataFrame = None,
 ) -> dict:
     """Roll a fitted SARIMAX model forward across the test period.
 
@@ -56,6 +60,12 @@ def rolling_sarimax_forecast(
     current filtered state, then updates that state with the newly-revealed
     actuals (refit=False -- parameters are NOT re-estimated) before moving
     to the next origin.
+
+    If the model was fit with exogenous covariates, `exog_test` (same index
+    as `test`) supplies their REAL values over the forecast horizon -- this
+    makes the resulting forecast a *conditional* forecast (conditional on
+    realised future weather), not a true forecast made from only
+    information available at the origin. See report.md, Part 9 Q5.
 
     Parameters
     ----------
@@ -67,6 +77,9 @@ def rolling_sarimax_forecast(
         Forecast horizon per origin, in hours.
     alpha : float
         Confidence level for the forecast intervals (0.05 -> 95% CI).
+    exog_test : pd.DataFrame, optional
+        Exogenous covariates over the test period, required if the model
+        was fit with `exog`.
 
     Returns
     -------
@@ -83,6 +96,7 @@ def rolling_sarimax_forecast(
 
     n_blocks = len(test) // block_size
     current_results = fitted_results
+    uses_exog = exog_test is not None
 
     forecast_parts, lower_parts, upper_parts = [], [], []
 
@@ -90,8 +104,9 @@ def rolling_sarimax_forecast(
         warnings.simplefilter("ignore")
         for k in range(n_blocks):
             block_index = test.index[k * block_size : (k + 1) * block_size]
+            block_exog = exog_test.loc[block_index] if uses_exog else None
 
-            fc = current_results.get_forecast(steps=block_size)
+            fc = current_results.get_forecast(steps=block_size, exog=block_exog)
             mean = fc.predicted_mean
             mean.index = block_index
             ci = fc.conf_int(alpha=alpha)
@@ -101,10 +116,13 @@ def rolling_sarimax_forecast(
             lower_parts.append(ci.iloc[:, 0])
             upper_parts.append(ci.iloc[:, 1])
 
-            # Reveal this block's actuals and update filter state only
-            # (refit=False -- parameters stay fixed at their initial MLE).
+            # Reveal this block's actuals (and exog) and update filter state
+            # only (refit=False -- parameters stay fixed at their initial MLE).
             actual_block = test.iloc[k * block_size : (k + 1) * block_size]
-            current_results = current_results.append(actual_block, refit=False)
+            append_kwargs = {"refit": False}
+            if uses_exog:
+                append_kwargs["exog"] = block_exog
+            current_results = current_results.append(actual_block, **append_kwargs)
 
     return {
         "forecast": pd.concat(forecast_parts).rename("sarimax"),

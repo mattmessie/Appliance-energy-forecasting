@@ -47,3 +47,20 @@ def test_rolling_forecast_raises_on_non_multiple_length(toy_fit):
     train, test, results = toy_fit
     with pytest.raises(ValueError):
         rolling_sarimax_forecast(results, test.iloc[:-1], block_size=24)
+
+
+def test_rolling_forecast_with_exog_covers_full_test_period():
+    series = _toy_series(200)
+    exog = pd.DataFrame(
+        {"weather": np.sin(np.arange(200) / 10)}, index=series.index
+    )
+    train, test = series.iloc[:-48], series.iloc[-48:]
+    exog_train, exog_test = exog.iloc[:-48], exog.iloc[-48:]
+
+    results = fit_sarimax(
+        train, order=(1, 0, 0), seasonal_order=(0, 0, 0, 0), maxiter=50, exog=exog_train
+    )
+    out = rolling_sarimax_forecast(results, test, block_size=24, exog_test=exog_test)
+
+    assert len(out["forecast"]) == len(test)
+    assert list(out["forecast"].index) == list(test.index)
