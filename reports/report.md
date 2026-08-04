@@ -469,6 +469,150 @@ being best on every individual day, and the four advanced models are
 visibly more *consistently* good across all 14 days (no single-day spikes
 of their own) than any of the five benchmarks.
 
+### 9.1 Answers to the required questions (Part 9)
+
+**Q1. Which benchmark model is strongest — naive, daily seasonal naive,
+weekly seasonal naive, or drift — and what does this tell you about the
+structure of appliance energy use?**
+
+`seasonal_naive_weekly` (MASE 1.077), ahead of `seasonal_naive_daily`
+(1.198), with `naive` and `drift` far behind (2.12+). This ordering is
+informative, not just a leaderboard: weekly seasonal naive beating daily
+seasonal naive means knowing "the same hour last **week**" predicts better
+than "the same hour **yesterday**" — i.e. day-of-week genuinely matters,
+consistent with the mild-but-real Fri/Sat bump seen in Part 1's
+hour/day-of-week boxplots, on top of the dominant 24-hour on/off cycle.
+That `naive` and `drift` — which ignore periodicity entirely — are roughly
+twice as bad as either seasonal-naive variant confirms the series is
+strongly *periodic* rather than driven mainly by short-term momentum from
+the immediately preceding hour.
+
+**Q2. Does SARIMAX improve on the strongest benchmark? Discuss whether
+daily seasonality, autocorrelation, and exogenous variables are adequately
+captured.**
+
+Yes — both the target-only (MASE 0.943, +12.4% MAE) and exogenous
+(0.984, +8.7% MAE) versions beat `seasonal_naive_weekly`. Daily seasonality
+and autocorrelation are captured well: the residual ACF (Section 6) shows
+no significant autocorrelation at any lag out to 48 hours, meaning the
+`(1,1,6)×(1,1,1,24)` structure has absorbed essentially all the linear and
+daily-seasonal signal available. What's *not* fully captured is the
+residual **distribution** — right-skewed and heavy-tailed rather than
+Gaussian, a direct echo of the bursty spike pattern from Part 1's EDA — a
+distributional/tail-risk gap, distinct from an autocorrelation-capture
+failure. Exogenous variables are only partially "adequately" captured in
+the sense that matters operationally: they meaningfully improve in-sample
+AIC (32,351.6 vs. 32,486.5) but slightly *worsen* rolling out-of-sample
+MASE (Section 6b) — the covariates carry real in-sample signal, but that
+signal doesn't reliably transfer into better rolling forecasts here.
+
+**Q3. Does the feature-based model improve when lag, rolling, time,
+sensor, and weather features are added? Which feature groups appear most
+useful?**
+
+The full combined feature set (all groups together) does beat the
+strongest benchmark (MASE 1.054 vs. 1.077, +2.1% MAE) but not SARIMAX
+(0.943). Feature importance (Section 7) makes the *usefulness ranking*
+unambiguous: recent target history (`roll_mean_3`, `roll_std_3`, `lag_1`)
+dominates by a wide margin, time-of-day features (`hour_cos`, `hour`)
+matter clearly but less, longer lags (`lag_24`, `lag_168`) register but
+rank well below the short-term features, and sensor/weather variables
+contribute only marginally — appearing at the bottom of the top 20 with
+importances an order of magnitude smaller than the leading lag/rolling
+features. *Caveat worth naming honestly:* this is feature-importance
+evidence from one model fit on the full combined set, not a formal
+group-by-group ablation (train once with only lags, once with only
+weather, etc., and compare). The ranking is a fair, standard proxy for
+"which groups matter" but a stricter causal claim would need the ablation
+— noted as a natural extension in Section 10.
+
+**Q4. Does the foundation model outperform the simpler benchmark, SARIMAX,
+and feature-based models? Is the improvement, if any, large enough to
+justify the extra complexity?**
+
+A genuinely mixed result (Section 8), not a clean win. Chronos essentially
+*ties* SARIMAX on MAE/MASE (0.959 vs. 0.943) despite zero fitting or tuning
+— remarkable given every other model here needed either a grid search or
+hyperparameter tuning. But it clearly does *not* outperform SARIMAX
+overall: RMSE is markedly worse (78.3 vs. 65.7) and bias is by far the
+worst of any model tested (-33.7, roughly 2.5x the next-worst), traced
+visually to systematic under-prediction of spike events with
+under-confident (too-narrow) intervals. It does beat every benchmark and
+the feature-based model. On "does the improvement justify the extra
+complexity" — there effectively *isn't* a numerical improvement over
+SARIMAX to weigh against complexity here: SARIMAX wins on RMSE and bias,
+and Chronos's "complexity" is actually inverted from the usual sense — zero
+per-dataset tuning effort, but a much heavier fixed dependency footprint
+(a full pretrained transformer plus `torch`/`transformers`) than SARIMAX's
+lightweight statistical model. For this specific dataset and task, SARIMAX
+remains the better choice on the actual numbers.
+
+**Q5. Which covariates would genuinely be known at the forecast origin? If
+you use future indoor temperature, humidity, or weather values from the
+test set, is this a true forecast or a conditional forecast?**
+
+Time-based features (hour, day-of-week, weekend indicator, cyclic
+encodings) are always genuinely known in advance — no issue. Target-derived
+lag/rolling features are legitimately known too, *by construction*: lags
+≥24h always reference genuinely revealed history, and short lags within a
+forecast block are built from the model's own earlier predictions in that
+block (Section 7), never from real future values — this is exactly why the
+recursive within-block design (and its regression tests) mattered. Indoor
+temperature/humidity and outdoor weather variables are a different story:
+**this project uses their real, realised test-period values** for both
+SARIMAX-with-exog (Section 6b) and the feature-based model (Section 7).
+That makes both of those two forecasts **conditional forecasts**
+(conditional on realised future weather), not true forecasts made from only
+information available at the origin. A real deployment would need either
+genuine weather *forecasts* as inputs (importing their own forecast error)
+or would need to drop these covariates and accept the resulting accuracy
+cost — which, per this project's results, appears to be small either way
+(SARIMAX-exog barely differs from target-only; sensor/weather features
+rank low in Q3's importance analysis). SARIMAX (target-only) and Chronos
+(zero-shot, target-only by construction) are the only two models in this
+project that are genuine true forecasts throughout.
+
+**Q6. Based on accuracy, interpretability, uncertainty, computational cost,
+and ease of deployment, which model would you recommend for practical
+smart-home energy forecasting, and why?**
+
+**SARIMAX (target-only).** Across every dimension asked about:
+
+- *Accuracy:* best MASE (0.943) and best RMSE (65.7) of all eight models
+  tested — and unlike the exogenous or feature-based models, achieved as a
+  genuine true forecast (Q5), not one propped up by unavailable future
+  covariates.
+- *Interpretability:* explicit AR/MA/seasonal coefficients and residual
+  diagnostics that can be directly inspected and explained — a real
+  advantage over an XGBoost ensemble or a black-box pretrained transformer
+  when justifying forecasts to a non-technical stakeholder.
+- *Uncertainty:* principled 95% confidence intervals from the fitted
+  state-space model. These do have a known, documented limitation (the
+  Gaussian assumption lets the interval dip below zero Wh, Section 6) —
+  but that's an understood property of a well-characterised model, not an
+  empirically-discovered miscalibration the way Chronos's too-narrow
+  intervals turned out to be (Section 8). The XGBoost model as built here
+  provides no native uncertainty estimate at all.
+- *Computational cost:* a one-time ~35-minute order-selection cost, but the
+  deployed rolling forecast itself is cheap — `append` + `forecast` is
+  sub-second per day. Chronos needs no training but carries a much heavier
+  inference-time dependency footprint (pretrained transformer, `torch`) for
+  an embedded smart-home context; XGBoost needs one fast training run but
+  a live sensor/weather feed to stay a true forecast at all (Q5).
+- *Ease of deployment:* the `append(refit=False)` rolling pattern maps
+  directly onto "re-forecast each morning with the latest reading" — cheap
+  incremental updates, no retraining, no external weather dependency.
+
+Chronos is a genuinely compelling *zero-effort baseline* — worth keeping in
+mind if the priority is skipping model-specific engineering entirely — but
+its worse RMSE and materially miscalibrated intervals make it a weaker
+practical choice than SARIMAX for this specific application. The
+exogenous-SARIMAX and feature-based models would only become preferable if
+genuine forecast weather (not realised) were available and shown to help —
+this project's results don't demonstrate that; if anything, Section 6b
+shows the opposite (exogenous variables slightly *hurt* rolling accuracy
+despite helping in-sample fit).
+
 ## 10. Discussion and limitations
 
 *(to be written — Part 10)*
