@@ -1,569 +1,144 @@
 # Appliance Energy Forecasting
 
-This repository contains a reproducible time-series forecasting pipeline for modelling and forecasting household appliance energy use.
-
-The project uses the **Appliances Energy Prediction** dataset, which contains appliance energy consumption, indoor temperature and humidity sensor measurements, outdoor weather variables, and timestamp information. The aim is to compare simple benchmark models, a SARIMAX model, a feature-based machine-learning model, and a time-series foundation model.
-
-## Project aim
-
-The aim of this assignment is to forecast short-term household appliance energy use and evaluate whether increasingly complex models improve on simple benchmark methods.
-
-The main questions are:
-
-1. How well do simple benchmark models forecast appliance energy use?
-2. Does a SARIMAX model improve on the benchmark forecasts?
-3. Do sensor, weather, and time-based covariates improve forecast accuracy?
-4. Does a feature-based machine-learning model such as XGBoost improve performance?
-5. Does a time-series foundation model such as Chronos, TimesFM, or TimeGPT provide any additional benefit?
-6. Which model would be most suitable for a practical smart-home energy forecasting system?
-
-## Dataset
-
-The dataset used in this project is the **Appliances Energy Prediction** dataset.
-
-The target variable is:
-
-```text
-Appliances
-```
-
-This represents household appliance energy use for each time interval.
-
-The original dataset is sampled every 10 minutes and contains variables including:
-
-```text
-date
-Appliances
-lights
-T1, RH_1
-T2, RH_2
-T3, RH_3
-T4, RH_4
-T5, RH_5
-T6, RH_6
-T7, RH_7
-T8, RH_8
-T9, RH_9
-T_out
-Press_mm_hg
-RH_out
-Windspeed
-Visibility
-Tdewpoint
-```
-
-The `T` variables are indoor temperature measurements from different rooms or sensor locations. The `RH` variables are indoor relative humidity measurements. The outdoor weather variables include outdoor temperature, pressure, outdoor humidity, wind speed, visibility, and dew point.
-
-## Forecasting task
-
-The main forecasting task is:
-
-```text
-Forecast appliance energy use over the next 24 hours.
-```
-
-If using the original 10-minute data, the 24-hour forecast horizon is:
-
-```python
-horizon = 24 * 6
-horizon = 144
-```
-
-If the data are resampled to hourly averages, the 24-hour forecast horizon is:
-
-```python
-horizon = 24
-```
-
-For this assignment, students may resample the original 10-minute data to hourly data to make SARIMAX modelling and pipeline execution more manageable.
-
-The recommended test period is the final 14 days of the dataset.
-
-For 10-minute data:
-
-```python
-test_steps = 14 * 24 * 6
-```
-
-For hourly data:
-
-```python
-test_steps = 14 * 24
-```
-
-## Models
-
-The project should compare the following model classes.
-
-### 1. Benchmark models
-
-Include several simple benchmark forecasts:
-
-```text
-Mean forecast
-Naive forecast
-Daily seasonal naive forecast
-Weekly seasonal naive forecast
-Drift forecast
-```
-
-For hourly data:
-
-```text
-Daily seasonal naive: same hour yesterday, lag 24
-Weekly seasonal naive: same hour last week, lag 168
-```
-
-For 10-minute data:
-
-```text
-Daily seasonal naive: same time yesterday, lag 144
-Weekly seasonal naive: same time last week, lag 1008
-```
-
-### 2. SARIMAX model
-
-Fit a SARIMAX model to the appliance energy series.
-
-For hourly data, a simple starting point is:
-
-```python
-order = (1, 0, 1)
-seasonal_order = (1, 1, 1, 24)
-```
-
-This captures short-term autocorrelation and daily seasonality.
-
-Students may fit:
-
-```text
-Target-only SARIMA/SARIMAX
-SARIMAX with exogenous variables
-```
-
-Possible exogenous variables include:
-
-```text
-T_out
-RH_out
-Windspeed
-Visibility
-Tdewpoint
-hour_sin
-hour_cos
-dow_sin
-dow_cos
-```
-
-### 3. Feature-based model
-
-Fit a feature-based machine-learning model such as:
-
-```text
-XGBoost
-LightGBM
-Random Forest
-HistGradientBoostingRegressor
-```
-
-The feature table should include:
-
-```text
-Lagged appliance energy use
-Rolling means
-Rolling standard deviations
-Hour-of-day features
-Day-of-week features
-Weekend indicator
-Indoor temperature variables
-Indoor humidity variables
-Outdoor weather variables
-```
-
-Students should ensure that lagged and rolling features use only past observations.
-
-### 4. Foundation model
-
-Fit a time-series foundation model such as:
-
-```text
-Chronos
-TimesFM
-TimeGPT
-```
-
-The foundation model may be used as:
-
-```text
-Target-only forecasting model
-Covariate-informed forecasting model, if supported
-Zero-shot model
-Fine-tuned or adapted model, if appropriate
-```
-
-Students should clearly explain how the foundation model is being used and whether it has access to covariates.
-
-## Feature sources
-
-The project uses three main types of features.
-
-### Original measured variables
-
-These come directly from the dataset:
-
-```text
-Appliances
-lights
-indoor temperature variables
-indoor humidity variables
-outdoor weather variables
-```
-
-### Time-based features
-
-These are created from the timestamp:
-
-```text
-hour
-dayofweek
-is_weekend
-hour_sin
-hour_cos
-dow_sin
-dow_cos
-```
-
-Example:
-
-```python
-data["hour"] = data.index.hour
-data["dayofweek"] = data.index.dayofweek
-data["is_weekend"] = (data["dayofweek"] >= 5).astype(int)
-
-data["hour_sin"] = np.sin(2 * np.pi * data["hour"] / 24)
-data["hour_cos"] = np.cos(2 * np.pi * data["hour"] / 24)
-
-data["dow_sin"] = np.sin(2 * np.pi * data["dayofweek"] / 7)
-data["dow_cos"] = np.cos(2 * np.pi * data["dayofweek"] / 7)
-```
-
-### Lag and rolling features
-
-These are created from the target variable, `Appliances`.
-
-For hourly data:
-
-```python
-data["lag_1"] = data["Appliances"].shift(1)
-data["lag_24"] = data["Appliances"].shift(24)
-data["lag_168"] = data["Appliances"].shift(168)
-
-data["roll_mean_24"] = data["Appliances"].shift(1).rolling(24).mean()
-data["roll_std_24"] = data["Appliances"].shift(1).rolling(24).std()
-```
-
-The `.shift(1)` is important because it prevents the model from using the current or future value of the target variable.
+A time-series case study forecasting household appliance energy use (UCI
+"Appliances Energy Prediction" dataset) using five simple benchmarks,
+SARIMAX (target-only and with exogenous weather covariates), a tuned
+feature-based ML model (XGBoost), and a pretrained time-series foundation
+model (Chronos) — evaluated under an identical rolling 24-hour-ahead
+walk-forward design across the final 14 days of the series.
+
+**Full write-up:** [`reports/report.docx`](reports/report.docx) /
+[`reports/report.pdf`](reports/report.pdf) (the submitted report — 7 pages).
+[`reports/report.md`](reports/report.md) is a longer working document with
+the full design reasoning, process notes, and every intermediate finding.
+
+## Headline result
+
+| model | MAE | RMSE | MASE | Bias |
+|---|---|---|---|---|
+| **SARIMAX (target-only)** | **38.1** | **65.7** | **0.943** | -5.0 |
+| Foundation model (Chronos, zero-shot) | 38.7 | 78.3 | 0.959 | -33.7 |
+| SARIMAX + exogenous weather | 39.7 | 65.8 | 0.984 | +1.5 |
+| Feature-based model (XGBoost, tuned) | 42.5 | 66.9 | 1.054 | +0.8 |
+| Seasonal naive (weekly) — strongest benchmark | 43.5 | 81.4 | 1.077 | -13.2 |
+
+SARIMAX (target-only) is the best-performing and recommended model — see
+`reports/report.docx` Section 9 and the required-questions section for the
+full analysis and reasoning.
 
 ## Repository structure
-
-A suggested structure is:
 
 ```text
 appliance-energy-forecasting/
 │
-├── README.md
-├── requirements.txt
-├── environment.yml
-├── .gitignore
-│
 ├── data/
-│   ├── raw/
-│   ├── interim/
-│   └── processed/
+│   ├── raw/                    # cached raw UCI CSV (gitignored — regenerated on first run)
+│   └── processed/              # cleaned, resampled hourly series
 │
-├── notebooks/
-│   ├── 01_data_download_and_cleaning.ipynb
-│   ├── 02_exploratory_analysis.ipynb
-│   ├── 03_benchmark_models.ipynb
-│   ├── 04_sarimax_models.ipynb
-│   ├── 05_feature_based_models.ipynb
-│   ├── 06_foundation_model.ipynb
-│   └── 07_model_comparison.ipynb
+├── notebooks/                  # exploration & results, one per project phase
 │
-├── src/
-│   └── appliance_energy/
-│       ├── __init__.py
-│       ├── config.py
-│       ├── pipeline.py
-│       ├── data.py
-│       ├── features.py
-│       ├── evaluation.py
-│       ├── plotting.py
-│       └── models/
-│           ├── __init__.py
-│           ├── benchmarks.py
-│           ├── sarimax.py
-│           ├── feature_models.py
-│           └── foundation.py
+├── src/appliance_energy/
+│   ├── config.py                # paths, constants (target, horizon, test period)
+│   ├── data.py                  # download/clean/resample
+│   ├── features.py               # time + lag/rolling feature engineering
+│   ├── evaluation.py            # MAE, RMSE, MASE, Bias
+│   └── models/
+│       ├── benchmarks.py         # mean, naive, seasonal naive, drift (rolling)
+│       ├── sarimax.py            # SARIMAX fit + rolling forecast (target/exog)
+│       ├── feature_models.py     # XGBoost fit (tuned) + recursive rolling forecast
+│       └── foundation.py         # Chronos zero-shot rolling forecast
 │
 ├── scripts/
-│   ├── download_data.py
-│   ├── make_features.py
-│   ├── run_pipeline.py
-│   └── evaluate_models.py
+│   ├── run_pipeline.py           # star: single entry point — runs everything
+│   ├── sarimax_grid_search.py    # AIC grid search (147 combos, ~35 min)
+│   ├── eda_and_stationarity.py
+│   ├── run_benchmarks.py
+│   ├── run_sarimax.py
+│   ├── run_sarimax_exog.py
+│   ├── run_feature_model.py
+│   ├── run_chronos.py            # needs internet access to huggingface.co
+│   └── run_full_comparison.py
 │
 ├── outputs/
-│   ├── figures/
-│   ├── forecasts/
-│   ├── metrics/
-│   └── model_objects/
+│   ├── figures/                  # every plot referenced in the report
+│   ├── forecasts/all_forecasts.csv       # every model's forecast, one file
+│   └── metrics/model_comparison.csv      # final MAE/RMSE/MASE/Bias table
 │
 ├── reports/
-│   ├── report.md
-│   └── figures/
+│   ├── report.docx, report.pdf   # the submitted report
+│   └── report.md                 # working document with full design reasoning
 │
-└── tests/
-    ├── test_features.py
-    ├── test_evaluation.py
-    └── test_benchmarks.py
+└── tests/                        # pytest — 37 tests, incl. leakage-regression guards
 ```
 
 ## Installation
 
-Create a Python environment.
-
-Using `venv`:
-
 ```bash
 python -m venv .venv
-source .venv/bin/activate
-```
-
-On Windows:
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-Install the required packages:
-
-```bash
+source .venv/bin/activate      # .venv\Scripts\activate on Windows
 pip install -r requirements.txt
 ```
 
-A minimal `requirements.txt` should include:
-
-```text
-numpy
-pandas
-matplotlib
-scikit-learn
-statsmodels
-```
-
-If using XGBoost:
-
-```text
-xgboost
-```
-
-If using TimeGPT:
-
-```text
-nixtla
-```
-
-If using Chronos or TimesFM, additional packages such as `torch`, `transformers`, or model-specific dependencies may be required.
-
 ## Running the pipeline
-
-The full analysis should be reproducible from the command line.
-
-The main pipeline entry point should be:
 
 ```bash
 python scripts/run_pipeline.py
 ```
 
-The pipeline should:
+This downloads/caches the raw data, cleans and resamples it, runs the EDA
+and stationarity tests, fits every benchmark and model, evaluates them all
+under the rolling walk-forward design, and saves every figure/metric/
+forecast to `outputs/`.
 
-1. Load or download the dataset.
-2. Clean and prepare the time series.
-3. Create time, lag, rolling, sensor, and weather features.
-4. Split the data into training and test sets.
-5. Fit benchmark models.
-6. Fit the SARIMAX model.
-7. Fit the feature-based model.
-8. Fit or call the foundation model.
-9. Evaluate all forecasts.
-10. Save forecasts, metrics, and plots.
+Two steps have genuine practical constraints on a fresh clone, handled
+explicitly rather than silently:
 
-## Outputs
+- **SARIMAX order selection** (the 147-combination AIC grid search) takes
+  ~35 minutes. By default the pipeline skips re-running it and uses the
+  order already selected (`(1,1,6)`, seasonal `(1,1,1,24)` — see
+  `reports/report.docx`, Section 6). Pass `--grid-search` to redo it from
+  scratch.
+- **The foundation model** (Chronos) downloads pretrained weights from
+  Hugging Face Hub on first use, which needs outbound internet access to
+  `huggingface.co`. On a normal machine this just works; on a
+  network-restricted machine it will fail with a clear message rather than
+  crashing the rest of the pipeline. Pass `--skip-chronos` to skip it
+  outright.
 
-The pipeline should save forecasts to:
-
-```text
-outputs/forecasts/all_forecasts.csv
+```bash
+python scripts/run_pipeline.py --grid-search      # also redo SARIMAX order selection
+python scripts/run_pipeline.py --skip-chronos     # skip the foundation model step
 ```
 
-This file should contain the actual values and model forecasts:
+Individual steps can also be run on their own — see `scripts/`, each is
+self-contained and documented.
 
-```text
-actual
-mean
-naive
-seasonal_naive_daily
-seasonal_naive_weekly
-drift
-sarimax
-feature_model
-foundation_model
-```
-
-The pipeline should save model comparison metrics to:
-
-```text
-outputs/metrics/model_comparison.csv
-```
-
-This file should contain:
-
-```text
-model
-MAE
-RMSE
-MASE
-Bias
-```
-
-The pipeline should save figures to:
-
-```text
-outputs/figures/
-```
-
-Suggested figures include:
-
-```text
-forecast_comparison.png
-error_diagnostics.png
-residual_acf.png
-feature_importance.png
-```
-
-## Evaluation metrics
-
-All models should be evaluated on the same test period.
-
-Required metrics:
-
-```text
-MAE
-RMSE
-MASE
-Bias
-```
-
-Students should compare all models against the strongest benchmark, not just against each other.
-
-## Data leakage
-
-Students must avoid data leakage.
-
-Examples of leakage include:
-
-```text
-Using future values of Appliances in lag or rolling features
-Creating rolling features without shifting the target first
-Scaling the full dataset before the train-test split
-Using future sensor or weather values without discussing forecast realism
-Choosing the final model based only on test-set performance
-```
-
-Important point:
-
-```text
-Future time-of-day and day-of-week variables are known in advance. Future indoor sensor and weather variables may not be known in a real operational forecast. If realised future sensor or weather values are used from the test set, the result should be described as a conditional forecast.
-```
-
-## Report
-
-The final report should be 6–8 pages and should describe the full analysis.
-
-Suggested report structure:
-
-```text
-1. Introduction
-2. Data and preprocessing
-3. Exploratory analysis
-4. Forecasting design
-5. Benchmark models
-6. SARIMAX model
-7. Feature-based model
-8. Foundation model
-9. Results and error analysis
-10. Discussion and limitations
-11. Conclusion
-```
-
-The report should answer the following questions:
-
-1. Which benchmark model is strongest, and what does this reveal about appliance energy use?
-2. Does SARIMAX improve on the strongest benchmark?
-3. Does the feature-based model improve when lag, rolling, time, sensor, and weather features are added?
-4. Does the foundation model outperform the simpler models?
-5. Which covariates would genuinely be known at the forecast origin?
-6. Which model would you recommend for practical smart-home energy forecasting, and why?
-
-## Tests
-
-The repository should include simple tests for important functions.
-
-Examples:
-
-```text
-test that forecast lengths match the test period
-test that MASE is zero for a perfect forecast
-test that lag features do not use future target values
-test that the processed dataset has no missing target values
-```
-
-Run tests using:
+## Running the tests
 
 ```bash
 pytest
 ```
 
-## Good practice
+37 tests across data preprocessing, feature engineering, every model's
+rolling-forecast logic, and the evaluation metrics — including regression
+tests that specifically guard against data leakage (e.g. confirming a
+day's forecast never changes if later test-period actuals are corrupted).
 
-Students should follow these principles:
+## Notes on modelling choices
 
-```text
-Use clear function names.
-Keep reusable code in src/.
-Keep notebooks for exploration and explanation.
-Keep scripts small and focused.
-Do not commit large raw data files.
-Make the pipeline reproducible from a fresh clone.
-Set random seeds where relevant.
-Compare every advanced model against simple benchmarks.
-Explain whether covariates are known at the forecast origin.
-Document any modelling assumptions.
-```
+A few decisions are documented in more depth in `reports/report.md` and in
+code comments where they're made, but worth summarising here:
 
-## Expected submission
-
-The submitted repository should include:
-
-```text
-README.md
-requirements.txt or environment.yml
-source code in src/
-pipeline script in scripts/
-notebooks showing exploration and results
-generated metrics and figures
-final report
-```
-
-The repository should run from a fresh clone using the instructions in this README.
+- **Rolling, not single-shot, evaluation.** The test period (final 14
+  days) is split into 14 daily origins; each forecasts the next 24 hours
+  from an expanding history, mirroring how a real system would re-forecast
+  each morning. See `report.md`, Section 4, for the full reasoning and why
+  this matters (concretely demonstrated in Section 9's day-by-day error
+  analysis).
+- **Conditional forecasts, clearly labelled.** SARIMAX-with-exog and the
+  feature-based model both use real (not forecast) future weather values,
+  which the assignment brief explicitly allows provided it's labelled as
+  such — see Part 9, Q5 in the report.
+- **Single dataset.** The assignment brief names and links only the one
+  UCI dataset throughout; a note in `report.md` addresses this against the
+  marking rubric's "both datasets" phrasing.
