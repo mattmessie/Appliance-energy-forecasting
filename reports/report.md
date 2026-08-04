@@ -414,7 +414,60 @@ large spikes is the clear, specific weakness.
 
 ## 9. Results and error analysis
 
-*(to be written — Part 8/10)*
+**Full model comparison, ranked by MASE, with explicit comparison against
+the strongest benchmark** (`seasonal_naive_weekly`; see
+`outputs/metrics/vs_strongest_benchmark.csv`):
+
+| model | MAE | RMSE | MASE | Bias | % MAE vs. strongest benchmark | Beats strongest benchmark? |
+|---|---|---|---|---|---|---|
+| sarimax | 38.1 | 65.7 | 0.943 | -5.0 | +12.4% | ✅ |
+| foundation_model | 38.7 | 78.3 | 0.959 | -33.7 | +11.0% | ✅ |
+| sarimax_exog | 39.7 | 65.8 | 0.984 | +1.5 | +8.7% | ✅ |
+| feature_model | 42.5 | 66.9 | 1.054 | +0.8 | +2.1% | ✅ |
+| seasonal_naive_weekly | 43.5 | 81.4 | 1.077 | -13.2 | — | (itself) |
+| seasonal_naive_daily | 48.3 | 85.6 | 1.198 | +1.8 | -11.2% | ❌ |
+| mean | 50.3 | 74.9 | 1.246 | -3.3 | -15.6% | ❌ |
+| naive | 85.6 | 110.4 | 2.121 | +51.0 | -96.9% | ❌ |
+| drift | 85.8 | 110.7 | 2.127 | +51.4 | -97.4% | ❌ |
+
+All four "advanced" models (SARIMAX target-only, Chronos, SARIMAX-exog,
+XGBoost) beat the strongest benchmark on MASE; none of the five benchmark
+models do better than `seasonal_naive_weekly` itself. The ranking is
+consistent whether measured by MASE or by % MAE improvement, which is a
+useful sanity check — the two metrics agree on model ordering even though
+they're scaled differently.
+
+**Error distribution per model** (`error_diagnostics.png`, left panel):
+SARIMAX and the feature-based model have the tightest, most centred error
+boxes (narrow interquartile range, median close to zero) — the "best
+individual-hour behaviour" view, not just best on-average. `naive` and
+`drift` are dramatically worse in both spread and median offset, both
+sitting clearly above zero (systematic over-forecasting — a direct visual
+confirmation of their large positive Bias values in the table above).
+`foundation_model`'s box is visibly shifted *below* zero relative to
+everything except `seasonal_naive_weekly`, matching its large negative
+Bias — a distinct failure mode from `naive`/`drift`'s over-forecasting.
+
+**MAE by day of the 14-day test period** (`error_diagnostics.png`, right
+panel) surfaces something the aggregate metrics alone hide: `naive` and
+`drift`'s catastrophic day-1 error (MAE > 240, an order of magnitude worse
+than every other model that day) is almost entirely a **single-origin
+artefact** — the last training-set hour happened to be an unusually high
+spike (~350 Wh), and since these two benchmarks are flat/linear
+extrapolations from that one value with no seasonal correction, day 1 pays
+the full cost of that one unlucky observation. By day 2 they've already
+partially recovered (dropping toward 80-110), because the rolling design
+lets them re-anchor on a fresh (more typical) value each day — this is
+direct visual evidence for why the rolling walk-forward design (Section 4)
+matters: a single-origin, non-rolling evaluation would have let one unlucky
+training-set endpoint distort the *entire* 336-hour verdict on these
+models, not just one day of it. It's also worth noting `seasonal_naive_weekly`
+— the strongest *average* benchmark — has its own bad day (day 7, MAE ≈ 98,
+worse than every other model that day): "strongest benchmark" is a
+statement about the average across the test period, not a guarantee of
+being best on every individual day, and the four advanced models are
+visibly more *consistently* good across all 14 days (no single-day spikes
+of their own) than any of the five benchmarks.
 
 ## 10. Discussion and limitations
 
