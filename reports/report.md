@@ -321,7 +321,52 @@ troughs are well captured individually.
 
 ## 8. Foundation model
 
-*(to be written — Part 7/10)*
+**Model choice: Chronos** (`amazon/chronos-t5-tiny`), used zero-shot —
+open-weight and runs entirely locally once downloaded, unlike TimeGPT
+(closed, API-only, would require every future run of this repo to have a
+valid Nixtla API key just to reproduce results — a poor fit for the brief's
+own "runs from a fresh clone" requirement) or TimesFM (a legitimate
+alternative, but a historically fussier install for no clear accuracy
+edge on data like this).
+
+**Target-only, by necessity, not choice.** Chronos's forecasting API
+(`predict_quantiles`) takes a single numeric context series — there's no
+mechanism for passing weather/sensor covariates alongside it, unlike
+SARIMAX (`exog=`) or the feature-based model (arbitrary feature columns).
+This is a genuine capability difference worth naming directly rather than
+glossing over: Chronos structurally cannot use the same information the
+other two "richer" models can, in Part 9 Q4/Q5's terms.
+
+**Zero-shot means no fitting step at all** — the pretrained model is called
+directly with the available history as context; there's no training-set
+optimisation the way there is for SARIMAX (AIC grid search) or XGBoost
+(RandomizedSearchCV). The same 14-daily-origin rolling design applies —
+each origin's context is the expanding history up to that point — but
+"rolling" here is simpler than for the other models: since there's no
+parameter state, each origin's call to `predict_quantiles` is entirely
+independent, not a `.append(refit=False)`-style state update. Point
+forecasts and confidence intervals both come directly from
+`predict_quantiles`'s sample-quantile output — median for the point
+forecast, 5th/95th percentiles for a 90% interval.
+
+**A note on how this section was built, for transparency.** The development
+sandbox this project was built in blocks network access to
+`huggingface.co`, so the pretrained Chronos weights could not actually be
+downloaded or run there (verified directly: a request to `huggingface.co`
+returns HTTP 403, `host_not_allowed`). What *was* possible from that
+sandbox: installing `chronos-forecasting` itself from PyPI (no Hugging Face
+access needed for that) and checking the code in
+`src/appliance_energy/models/foundation.py` directly against the real
+installed library's source — which caught a real bug before it ever ran
+(the predict method's argument is `inputs=`, not `context=` as first
+assumed) — plus a full unit-test suite
+(`tests/test_foundation.py`) exercising the rolling/indexing/no-leakage
+logic against a stub pipeline with the exact same tensor shapes as the real
+one. Actual inference against the real pretrained weights was run
+separately, locally, via `scripts/run_chronos.py`.
+
+*(Results and evaluation table below to be filled in once
+`scripts/run_chronos.py` has been run and its output merged.)*
 
 ## 9. Results and error analysis
 
