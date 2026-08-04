@@ -368,6 +368,50 @@ separately, locally, via `scripts/run_chronos.py`.
 *(Results and evaluation table below to be filled in once
 `scripts/run_chronos.py` has been run and its output merged.)*
 
+**Result, run locally (see note above on sandbox/execution split):**
+
+| model | MAE | RMSE | MASE | Bias |
+|---|---|---|---|---|
+| sarimax | 38.1 | 65.7 | **0.943** | -5.0 |
+| **foundation_model (Chronos)** | **38.7** | **78.8** | 0.959 | **-34.2** |
+| sarimax_exog | 39.7 | 65.8 | 0.984 | +1.5 |
+| feature_model (XGBoost) | 42.5 | 66.9 | 1.054 | +0.8 |
+| seasonal_naive_weekly | 43.5 | 81.4 | 1.077 | -13.2 |
+
+**Not a clean win or loss — a genuinely mixed result worth reading
+carefully.** On MAE and MASE, Chronos is essentially tied with SARIMAX
+(0.959 vs 0.943) — remarkable given it had zero fitting, tuning, or
+exposure to this specific dataset at all; every other model here required
+either an AIC grid search, hyperparameter tuning, or both. But its RMSE is
+markedly worse than SARIMAX's (78.8 vs 65.7 — closer to the weakest
+benchmark than to SARIMAX), and its bias (-34.2) is by far the worst of any
+model tested — roughly 2.5x the size of the next-worst bias
+(`seasonal_naive_weekly`, -13.2). Since RMSE penalises large errors more
+than MAE does, and MASE is itself a mean (not a max or a spike-sensitive
+measure), this combination — competitive *typical-case* accuracy alongside
+much worse RMSE and a large systematic negative bias — points to Chronos
+consistently *under*-forecasting, most likely concentrated on the large
+spike events that the rest of this dataset's EDA (Part 1) already flagged
+as the hardest part of this series to model. A zero-shot model with no
+exposure to this specific household's consumption baseline, working from
+only a capped 512-hour trailing context window, would plausibly default
+toward more conservative/central predictions than a model fit directly on
+~3,000 hours of this exact series (SARIMAX) or one with lag/rolling
+features built directly from it (XGBoost).
+
+Visually (`foundation_model_forecast.png`), this reads exactly as the
+metrics suggest: the daily on/off shape and the low troughs are tracked
+reasonably well, but almost every large spike (e.g. 16th, 21st, 27th May)
+is substantially under-predicted — the orange line stays close to its
+typical daily range while the actual series spikes well above it. Beyond
+the point forecast, the 90% interval band itself is often too narrow to
+even *contain* these spikes — not just a biased point estimate, but a
+miscalibrated uncertainty estimate that understates how far off the model
+could plausibly be. For a model with literally no exposure to this
+household's data, tracking the routine daily pattern this well is a
+genuinely notable result; the systematic failure to anticipate or bound the
+large spikes is the clear, specific weakness.
+
 ## 9. Results and error analysis
 
 *(to be written — Part 8/10)*
