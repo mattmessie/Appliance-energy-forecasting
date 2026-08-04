@@ -96,10 +96,17 @@ def plot_error_diagnostics(test: pd.Series, all_forecasts: pd.DataFrame):
 
     # Panel 1: error distribution per model
     axes[0].axhline(0, color="grey", linewidth=0.8, linestyle="--")
+    # Note: matplotlib renamed boxplot()'s `labels=` argument to
+    # `tick_labels=` in recent versions and later dropped `labels`
+    # entirely, so passing it directly breaks depending on the installed
+    # matplotlib version. Setting tick labels manually afterward instead
+    # works identically across all versions.
     axes[0].boxplot(
         [errors[m].dropna().values for m in models],
-        labels=models, showfliers=True, flierprops={"markersize": 3, "alpha": 0.4},
+        showfliers=True, flierprops={"markersize": 3, "alpha": 0.4},
     )
+    axes[0].set_xticks(range(1, len(models) + 1))
+    axes[0].set_xticklabels(models)
     axes[0].set_title("Forecast error distribution per model (forecast - actual)")
     axes[0].set_ylabel("Error (Wh)")
     axes[0].tick_params(axis="x", rotation=45)
