@@ -1,0 +1,55 @@
+APPLIANCE ENERGY - EDA & STATIONARITY SUMMARY
+==============================================
+
+Series length: 3290 hourly observations (2016-01-11 17:00:00 to 2016-05-27 18:00:00)
+
+Descriptive statistics (Wh):
+count    3290.000000
+mean       97.779129
+std        81.213695
+min        28.333333
+25%        50.000000
+50%        63.333333
+75%       110.000000
+max       608.333333
+
+Approx. seasonal strength (24h, additive decomposition): 0.284
+Approx. trend strength: 0.200
+(Strength close to 1 = component explains most of the variance left after removing the other components; Wang, Smith & Hyndman 2006 measure.)
+
+--- Levels (Appliances, hourly) ---
+ADF statistic: -8.9489
+ADF p-value:   0.000000
+ADF lags used: 29, nobs: 3260
+ADF critical values: {'1%': np.float64(-3.432357502010421), '5%': np.float64(-2.862426994644342), '10%': np.float64(-2.567242166152283)}
+ADF conclusion: stationary (reject H0)
+
+KPSS statistic: 0.0384
+KPSS p-value:   0.100000
+KPSS lags used: 25
+KPSS critical values: {'10%': 0.347, '5%': 0.463, '2.5%': 0.574, '1%': 0.739}
+KPSS conclusion: stationary (fail to reject H0)
+--- First difference (d=1) ---
+ADF statistic: -16.9526
+ADF p-value:   0.000000
+ADF lags used: 29, nobs: 3259
+ADF critical values: {'1%': np.float64(-3.4323581184837426), '5%': np.float64(-2.862427266935068), '10%': np.float64(-2.5672423111140947)}
+ADF conclusion: stationary (reject H0)
+
+KPSS statistic: 0.0783
+KPSS p-value:   0.100000
+KPSS lags used: 113
+KPSS critical values: {'10%': 0.347, '5%': 0.463, '2.5%': 0.574, '1%': 0.739}
+KPSS conclusion: stationary (fail to reject H0)
+--- Seasonal difference (lag 24) ---
+ADF statistic: -13.5934
+ADF p-value:   0.000000
+ADF lags used: 25, nobs: 3240
+ADF critical values: {'1%': np.float64(-3.4323699038367206), '5%': np.float64(-2.8624324724087438), '10%': np.float64(-2.5672450823997868)}
+ADF conclusion: stationary (reject H0)
+
+KPSS statistic: 0.0087
+KPSS p-value:   0.100000
+KPSS lags used: 27
+KPSS critical values: {'10%': 0.347, '5%': 0.463, '2.5%': 0.574, '1%': 0.739}
+KPSS conclusion: stationary (fail to reject H0)
