@@ -90,7 +90,70 @@ run via `scripts/run_benchmarks.py`)*
 
 ## 6. SARIMAX model
 
-*(to be written — Part 4/10)*
+**Order selection.** Following the assignment's suggested starting point
+(`seasonal_order=(1,1,1,24)` to capture daily seasonality), the non-seasonal
+order `(p,d,q)` was chosen by AIC grid search over the full required range
+(p∈[0,6], d∈[0,2], q∈[0,6] — 147 combinations). For speed, the grid search
+itself ran on the last 30 days of the training set (720 observations = 30
+full daily cycles) rather than the full ~3,000-observation training set —
+individual fits at this data length take 5-25s vs. 25-130s+ on the full
+series, which made the full 147-combination grid tractable (~35 minutes
+total instead of several hours). The order chosen by this search was then
+refit on the full training set for the actual forecasting model.
+
+A secondary check mattered here: several of the lowest-AIC candidates from
+the fast grid search (using a capped `maxiter=35` for speed) had not
+actually converged. Refitting the top 4 candidates with a much higher
+iteration budget confirmed all of them do converge given enough iterations,
+and **reordered the ranking** — `order=(1,1,6)` converges cleanly and has
+the best AIC (7235.3) once given room to converge, edging out
+`(0,1,6)` (7241.5) and `(6,0,0)` (7246.2, the best of the models that had
+already converged in the fast pass). This is a useful cautionary point for
+the report: a fast AIC grid search with a low iteration cap can rank models
+in a misleading order if convergence itself is iteration-starved — cheap to
+check, easy to get wrong.
+
+**Final model:** `order=(1,1,6)`, `seasonal_order=(1,1,1,24)`, `trend='c'`,
+refit on the full 2,954-observation training set (AIC 32,486.5, converged).
+
+**Residual diagnostics** (`outputs/figures/sarimax_residual_diagnostics.png`):
+the ACF of residuals shows no significant autocorrelation at any lag up to
+48 hours — the model has captured essentially all of the linear
+autocorrelation and daily-seasonal structure in the series, residuals are
+close to white noise. The residual *distribution*, however, is sharply
+peaked and right-skewed (mean ≈ -0.2, std ≈ 63.6 Wh, with a long positive
+tail out past 300 Wh) rather than Gaussian — a direct echo of the "bursty
+appliances" pattern flagged in Part 1's EDA. SARIMAX assumes Gaussian,
+constant-variance errors, so it structurally cannot capture occasional large
+spikes; this also explains why the 95% confidence intervals
+(`outputs/figures/sarimax_forecast.png`) are wide enough to dip below zero
+Wh, which is physically impossible for energy use — a real limitation of
+the Gaussian assumption worth naming explicitly rather than a modelling
+error to fix.
+
+**Rolling forecast.** Following the same walk-forward design as the
+benchmarks (Section 4): the model is fit once, then rolled across the 14
+daily test origins via `SARIMAXResults.append(..., refit=False)` — updating
+the Kalman filter state with each newly-revealed day without re-estimating
+parameters — followed by a fresh `get_forecast(24)` (with 95% CI) at each
+origin.
+
+**Result: SARIMAX beats the strongest benchmark.**
+
+| model | MAE | RMSE | MASE | Bias |
+|---|---|---|---|---|
+| **sarimax** | **38.1** | **65.7** | **0.943** | -5.0 |
+| seasonal_naive_weekly | 43.5 | 81.4 | 1.077 | -13.2 |
+| seasonal_naive_daily | 48.3 | 85.6 | 1.198 | +1.8 |
+| mean | 50.3 | 74.9 | 1.246 | -3.3 |
+| naive | 85.6 | 110.4 | 2.121 | +51.0 |
+| drift | 85.8 | 110.7 | 2.127 | +51.4 |
+
+SARIMAX is the first model to bring MASE below 1 — a ~12% MAE improvement
+over the strongest benchmark (`seasonal_naive_weekly`). Visually
+(`sarimax_forecast.png`), it tracks the daily on/off shape substantially
+better than any benchmark and picks up several — though not all — of the
+larger spike events, consistent with the residual diagnostics above.
 
 ## 7. Feature-based model
 
