@@ -4,3 +4,4 @@ __pycache__/
 data/raw/*.csv
 outputs/model_objects/*
 .ipynb_checkpoints/
+.DS_Store
